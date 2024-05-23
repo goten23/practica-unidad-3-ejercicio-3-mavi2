@@ -1,0 +1,104 @@
+#include <iostream>
+#include <Box2D/Box2D.h>
+#include <SDL2/SDL.h>
+
+const float32 WORLD_WIDTH = 100.0f;
+const float32 WORLD_HEIGHT = 100.0f;
+const float32 BALL_RADIUS = 5.0f;
+const float32 PIVOT_X = WORLD_WIDTH / 2.0f;
+const float32 PIVOT_Y = WORLD_HEIGHT / 2.0f;
+
+int main(int argc, char* argv[]) {
+    // Inicialización de SDL
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+        std::cerr << "SDL_Init Error: " << SDL_GetError() << std::endl;
+        return 1;
+    }
+
+    SDL_Window* window = SDL_CreateWindow("Pelota Fijada a un Objeto Fijo",
+                                          100, 100, 800, 600, SDL_WINDOW_SHOWN);
+    if (window == nullptr) {
+        std::cerr << "SDL_CreateWindow Error: " << SDL_GetError() << std::endl;
+        SDL_Quit();
+        return 1;
+    }
+
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    if (renderer == nullptr) {
+        SDL_DestroyWindow(window);
+        std::cerr << "SDL_CreateRenderer Error: " << SDL_GetError() << std::endl;
+        SDL_Quit();
+        return 1;
+    }
+
+    // Inicialización de Box2D
+    b2Vec2 gravity(0.0f, -9.8f);
+    b2World world(gravity);
+
+    // Crear el suelo (objeto fijo)
+    b2BodyDef groundBodyDef;
+    groundBodyDef.position.Set(PIVOT_X, PIVOT_Y);
+    b2Body* groundBody = world.CreateBody(&groundBodyDef);
+
+    // Crear la pelota
+    b2BodyDef ballBodyDef;
+    ballBodyDef.type = b2_dynamicBody;
+    ballBodyDef.position.Set(PIVOT_X, PIVOT_Y + 10.0f);
+    b2Body* ballBody = world.CreateBody(&ballBodyDef);
+
+    b2CircleShape ballShape;
+    ballShape.m_radius = BALL_RADIUS;
+
+    b2FixtureDef fixtureDef;
+    fixtureDef.shape = &ballShape;
+    fixtureDef.density = 1.0f;
+    fixtureDef.friction = 0.3f;
+    fixtureDef.restitution = 0.5f;
+    ballBody->CreateFixture(&fixtureDef);
+
+    // Crear el resorte (Revolute Joint)
+    b2RevoluteJointDef jointDef;
+    jointDef.bodyA = groundBody;
+    jointDef.bodyB = ballBody;
+    jointDef.localAnchorA.Set(0, 0); // El pivote está en el centro del objeto fijo
+    jointDef.localAnchorB.Set(0, -10.0f); // La pelota está a 10 unidades de distancia
+    jointDef.collideConnected = false;
+    world.CreateJoint(&jointDef);
+
+    bool quit = false;
+    SDL_Event e;
+
+    while (!quit) {
+        while (SDL_PollEvent(&e) != 0) {
+            if (e.type == SDL_QUIT) {
+                quit = true;
+            }
+        }
+
+        world.Step(1.0f / 60.0f, 6, 2);
+
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderClear(renderer);
+
+        b2Vec2 position = ballBody->GetPosition();
+
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        SDL_Rect ballRect = { (int)(position.x * 800.0f / WORLD_WIDTH) - (int)BALL_RADIUS,
+                              (int)(600 - position.y * 600.0f / WORLD_HEIGHT) - (int)BALL_RADIUS,
+                              (int)(2 * BALL_RADIUS), (int)(2 * BALL_RADIUS) };
+        SDL_RenderFillRect(renderer, &ballRect);
+
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderDrawLine(renderer,
+                           (int)(PIVOT_X * 800.0f / WORLD_WIDTH), (int)(600 - PIVOT_Y * 600.0f / WORLD_HEIGHT),
+                           (int)(position.x * 800.0f / WORLD_WIDTH), (int)(600 - position.y * 600.0f / WORLD_HEIGHT));
+
+        SDL_RenderPresent(renderer);
+    }
+
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+
+    return 0;
+}
